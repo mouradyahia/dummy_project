@@ -54,3 +54,20 @@ app.controller('ProjectFormController', function($scope) {
         }
     };
 });
+
+
+
+
+
+
+
+    // Cascade: domain → labs
+    $scope.$watch("config.domain", function(newVal, oldVal) {
+        if (newVal === oldVal) return;
+        // Clear downstream selections so stale values can't be submitted
+        $scope.config.lab = null;
+        $scope.config.owner_id = null;
+        $scope.choices.lab = [];
+        $scope.choices.owner_id = [];
+        if (newVal) loadChoices("lab");
+    });

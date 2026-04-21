@@ -1,0 +1,56 @@
+runnable.json
+
+{
+    "meta": { "label": "Create project", "icon": "icon-plus" },
+    "impersonate": false,
+    "macroRoles": [{ "type": "PROJECT_CREATOR" }],
+    "resultType": "JSON_OBJECT",
+    "paramsTemplate": "project_form.html",
+    "paramsModule": "myplugin.projectForm",
+    "params": [
+        { "name": "project_name", "label": "Project name", "type": "STRING", "mandatory": true }
+    ]
+}
+
+resource/project_form.html
+
+<div ng-controller="ProjectFormController" style="margin: 10px 0">
+  <div class="control-group">
+    <label class="control-label">Project name</label>
+    <div class="controls">
+      <input type="text"
+             ng-model="config.project_name"
+             ng-change="validateName()"
+             class="form-control" />
+      <span class="help-inline" ng-if="validation.message"
+            ng-style="{color: validation.ok ? 'green' : '#c9302c'}">
+        {{ validation.message }}
+      </span>
+    </div>
+  </div>
+</div>
+
+js/project_form.js
+
+var app = angular.module('myplugin.projectForm', []);
+
+app.controller('ProjectFormController', function($scope) {
+    var PROJECT_KEY_RE = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
+
+    $scope.validation = { ok: null, message: "" };
+
+    $scope.validateName = function() {
+        var name = ($scope.config || {}).project_name || "";
+        if (!name) {
+            $scope.validation = { ok: null, message: "" };
+        } else if (name.length > 32) {
+            $scope.validation = { ok: false, message: "Too long (max 32 chars)" };
+        } else if (!/^[A-Za-z]/.test(name)) {
+            $scope.validation = { ok: false, message: "Must start with a letter" };
+        } else if (!PROJECT_KEY_RE.test(name)) {
+            $scope.validation = { ok: false, message: "Only letters, digits and underscores allowed" };
+        } else {
+            $scope.validation = { ok: true, message: "Valid ✓" };
+        }
+    };
+});

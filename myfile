@@ -165,3 +165,61 @@ if param == "contributors":
 
 if param == "separators":
     return {"choices": _as_choices(list_separators())}
+
+
+
+
+
+<div ng-controller="ProjectFormController" style="margin: 10px 0">
+
+  <!-- Domain (single-select, for reference) -->
+  <div class="control-group">
+    <label class="control-label">Domain</label>
+    <div class="controls">
+      <select dku-bs-select="{liveSearch:true}"
+              ng-model="config.domain"
+              ng-options="c.value as c.label for c in choices.domain">
+      </select>
+    </div>
+  </div>
+
+  <!-- Consumers (multi-select) -->
+  <div class="control-group">
+    <label class="control-label">Consumers</label>
+    <div class="controls">
+      <ui-select multiple
+                 ng-model="config.consumers"
+                 theme="bootstrap"
+                 close-on-select="false">
+        <ui-select-match placeholder="Add consumers...">
+          {{ $item.label }}
+        </ui-select-match>
+        <ui-select-choices repeat="c.value as c in choices.consumers | filter: $select.search">
+          {{ c.label }}
+        </ui-select-choices>
+      </ui-select>
+      <span class="help-inline" ng-if="config.consumers.length">
+        {{ config.consumers.length }} selected
+      </span>
+    </div>
+  </div>
+
+  <!-- Contributors (multi-select) -->
+  <div class="control-group">
+    <label class="control-label">Contributors</label>
+    <div class="controls">
+      <ui-select multiple
+                 ng-model="config.contributors"
+                 theme="bootstrap"
+                 close-on-select="false">
+        <ui-select-match placeholder="Add contributors...">
+          {{ $item.label }}
+        </ui-select-match>
+        <ui-select-choices repeat="c.value as c in choices.contributors | filter: $select.search">
+          {{ c.label }}
+        </ui-select-choices>
+      </ui-select>
+    </div>
+  </div>
+
+</div>

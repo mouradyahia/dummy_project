@@ -223,3 +223,27 @@ if param == "separators":
   </div>
 
 </div>
+
+
+
+
+$scope.$watch("config.lab", function(newVal, oldVal) {
+    if (newVal === oldVal) return;
+
+    // Clear downstream selections
+    $scope.config.owner_id = null;
+    $scope.config.consumers = [];        // ← add
+    $scope.config.contributors = [];     // ← add
+
+    // Clear downstream choice lists
+    $scope.choices.owner_id = [];
+    $scope.choices.consumers = [];       // ← add
+    $scope.choices.contributors = [];    // ← add
+
+    // Reload if a new lab is selected
+    if (newVal) {
+        loadChoices("owner_id");
+        loadChoices("consumers");        // ← add
+        loadChoices("contributors");     // ← add
+    }
+});

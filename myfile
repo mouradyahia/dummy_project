@@ -247,3 +247,34 @@ $scope.$watch("config.lab", function(newVal, oldVal) {
         loadChoices("contributors");     // ← add
     }
 });
+
+
+
+
+
+<!-- Consumers -->
+<div class="control-group">
+  <label class="control-label">Consumers</label>
+  <div class="controls">
+    <select multiple
+            dku-bs-select="{liveSearch: true, actionsBox: true, selectedTextFormat: 'count > 3', noneSelectedText: 'Select consumers...'}"
+            ng-model="config.consumers"
+            ng-options="c.value as c.label for c in choices.consumers">
+    </select>
+    <span class="help-inline" ng-if="config.consumers.length">
+      {{ config.consumers.length }} selected
+    </span>
+  </div>
+</div>
+
+<!-- Contributors -->
+<div class="control-group">
+  <label class="control-label">Contributors</label>
+  <div class="controls">
+    <select multiple
+            dku-bs-select="{liveSearch: true, actionsBox: true, selectedTextFormat: 'count > 3', noneSelectedText: 'Select contributors...'}"
+            ng-model="config.contributors"
+            ng-options="c.value as c.label for c in choices.contributors">
+    </select>
+  </div>
+</div>

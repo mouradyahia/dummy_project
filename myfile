@@ -71,3 +71,30 @@ app.controller('ProjectFormController', function($scope) {
         $scope.choices.owner_id = [];
         if (newVal) loadChoices("lab");
     });
+
+
+
+
+
+app.controller('ProjectFormController', function($scope, $timeout) {
+
+    // ... all your existing code unchanged ...
+
+    var debouncePromise = null;
+    $scope.onNameChange = function() {
+        if (debouncePromise) $timeout.cancel(debouncePromise);
+        $scope.nameCheck = { ok: null, message: "Checking..." };
+
+        debouncePromise = $timeout(function() {
+            $scope.callPythonDo({ parameterName: "__check_name" }).then(
+                function(data) {
+                    $scope.nameCheck = { ok: data.ok, message: data.message };
+                },
+                function(err) {
+                    console.error("Name check failed:", err);
+                    $scope.nameCheck = { ok: false, message: "Check failed" };
+                }
+            );
+        }, 300);
+    };
+});

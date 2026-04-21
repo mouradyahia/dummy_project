@@ -98,3 +98,70 @@ app.controller('ProjectFormController', function($scope, $timeout) {
         }, 300);
     };
 });
+
+
+
+<!-- Project contributors (multi-select, searchable) -->
+<div class="control-group">
+  <label class="control-label">Contributors</label>
+  <div class="controls">
+    <select multiple
+            dku-bs-select="{liveSearch: true, actionsBox: true, selectedTextFormat: 'count > 3'}"
+            ng-model="config.contributors"
+            ng-options="c.value as c.label for c in choices.contributors">
+    </select>
+    <span class="help-inline" ng-if="config.contributors.length">
+      {{ config.contributors.length }} selected
+    </span>
+  </div>
+</div>
+
+<!-- Project separators (multi-select, searchable) -->
+<div class="control-group">
+  <label class="control-label">Separators</label>
+  <div class="controls">
+    <select multiple
+            dku-bs-select="{liveSearch: true, actionsBox: true}"
+            ng-model="config.separators"
+            ng-options="s.value as s.label for s in choices.separators">
+    </select>
+  </div>
+</div>
+
+<ui-select multiple
+           ng-model="config.contributors"
+           theme="bootstrap"
+           close-on-select="false">
+  <ui-select-match placeholder="Add contributors...">
+    {{ $item.label }}
+  </ui-select-match>
+  <ui-select-choices repeat="c.value as c in choices.contributors | filter: $select.search">
+    {{ c.label }}
+  </ui-select-choices>
+</ui-select>
+
+{ "name": "contributors", "label": "Contributors", "type": "STRINGS" },
+{ "name": "separators",   "label": "Separators",   "type": "STRINGS" }
+
+
+$scope.choices = {
+    domain: [], lab: [], owner_id: [],
+    contributors: [], separators: []
+};
+
+// Must initialize as empty arrays, not undefined
+if (!$scope.config.contributors) $scope.config.contributors = [];
+if (!$scope.config.separators) $scope.config.separators = [];
+
+loadChoices("contributors");
+loadChoices("separators");
+
+
+if param == "contributors":
+    lab = config.get("lab")
+    if not lab:
+        return {"choices": []}
+    return {"choices": _as_choices(list_potential_contributors(lab))}
+
+if param == "separators":
+    return {"choices": _as_choices(list_separators())}

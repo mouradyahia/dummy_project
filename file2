@@ -1,0 +1,209 @@
+<div ng-controller="ProjectFormController" style="margin: 10px 0">
+
+  <!-- Domain -->
+  <div class="control-group">
+    <label class="control-label">Domain</label>
+    <div class="controls">
+      <select dku-bs-select="{liveSearch:true}"
+              ng-model="config.domain"
+              ng-options="c.value as c.label for c in choices.domain">
+        <option value="">— select a domain —</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Lab -->
+  <div class="control-group">
+    <label class="control-label">Lab</label>
+    <div class="controls">
+      <select dku-bs-select="{liveSearch:true}"
+              ng-model="config.lab"
+              ng-options="c.value as c.label for c in choices.lab">
+        <option value="">— select a lab —</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Owner -->
+  <div class="control-group">
+    <label class="control-label">Owner</label>
+    <div class="controls">
+      <select dku-bs-select="{liveSearch:true}"
+              ng-model="config.owner_id"
+              ng-options="c.value as c.label for c in choices.owner_id">
+        <option value="">— select an owner —</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Project name with collision check -->
+  <div class="control-group">
+    <label class="control-label">Project name</label>
+    <div class="controls">
+      <input type="text"
+             ng-model="config.project_name"
+             ng-change="onNameChange()"
+             class="form-control" />
+      <span class="help-inline"
+            ng-if="nameCheck.message"
+            ng-style="{color: nameCheck.ok ? 'green' : '#c9302c'}">
+        {{ nameCheck.message }}
+      </span>
+    </div>
+  </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+var app = angular.module('myplugin.projectForm', []);
+
+app.controller('ProjectFormController', function($scope) {
+
+    $scope.choices = { domain: [], lab: [], owner_id: [] };
+    $scope.nameCheck = { ok: null, message: "" };
+
+    // --- Load dropdown choices ---
+    function loadChoices(paramName) {
+        $scope.callPythonDo({ parameterName: paramName }).then(function(data) {
+            $scope.choices[paramName] = data.choices || [];
+        }, function(err) {
+            console.error("Failed to load " + paramName, err);
+            $scope.choices[paramName] = [];
+        });
+    }
+
+    loadChoices("domain");
+    loadChoices("lab");
+    loadChoices("owner_id");
+
+    // If owner depends on lab, reload owners when lab changes
+    $scope.$watch("config.lab", function(newVal, oldVal) {
+        if (newVal !== oldVal) {
+            $scope.config.owner_id = null;
+            loadChoices("owner_id");
+        }
+    });
+
+    // --- Debounced name collision check ---
+    var debounceTimer = null;
+    $scope.onNameChange = function() {
+        if (debounceTimer) clearTimeout(debounceTimer);
+        $scope.nameCheck = { ok: null, message: "Checking..." };
+
+        debounceTimer = setTimeout(function() {
+            $scope.callPythonDo({ parameterName: "__check_name" }).then(function(data) {
+                $scope.$apply(function() {
+                    $scope.nameCheck = {
+                        ok: data.ok,
+                        message: data.message
+                    };
+                });
+            }, function(err) {
+                $scope.$apply(function() {
+                    $scope.nameCheck = { ok: false, message: "Check failed" };
+                });
+            });
+        }, 300); // 300ms debounce
+    };
+});
+
+
+
+from project_data import (
+    list_domains, list_labs, list_owners, list_existing_project_names
+)
+
+def _as_choices(items):
+    return [{"value": i["id"], "label": i["label"]} for i in items]
+
+def do(payload, config, plugin_config, inputs):
+    param = payload.get("parameterName")
+
+    if param == "domain":
+        return {"choices": _as_choices(list_domains())}
+
+    if param == "lab":
+        return {"choices": _as_choices(list_labs())}
+
+    if param == "owner_id":
+        # cascading example: filter owners by selected lab
+        owners = list_owners()
+        # lab = config.get("lab")
+        # if lab: owners = [o for o in owners if o.get("lab") == lab]
+        return {"choices": _as_choices(owners)}
+
+    if param == "__check_name":
+        name = (config.get("project_name") or "").strip()
+        if not name:
+            return {"ok": None, "message": ""}
+        existing = {n.lower() for n in list_existing_project_names()}
+        if name.lower() in existing:
+            return {"ok": False, "message": "Name already exists"}
+        return {"ok": True, "message": "Available"}
+
+    return {"choices": []}
+
+
+
+
+{
+    "meta": { "label": "Create project", "icon": "icon-plus" },
+    "impersonate": false,
+    "macroRoles": [{ "type": "PROJECT_CREATOR" }],
+    "resultType": "JSON_OBJECT",
+    "paramsTemplate": "project_form.html",
+    "paramsModule": "myplugin.projectForm",
+    "paramsPythonSetup": "project_choices.py",
+    "params": [
+        { "name": "domain",       "label": "Domain",       "type": "STRING", "mandatory": true },
+        { "name": "lab",          "label": "Lab",          "type": "STRING", "mandatory": true },
+        { "name": "owner_id",     "label": "Owner",        "type": "STRING", "mandatory": true },
+        { "name": "project_name", "label": "Project name", "type": "STRING", "mandatory": true }
+    ]
+}
+
+
+def list_domains():
+    return [
+        {"id": "transport", "label": "Transport"},
+        {"id": "energy",    "label": "Energy"},
+        {"id": "health",    "label": "Health"},
+    ]
+
+def list_labs():
+    return [
+        {"id": "lab_tunis", "label": "Lab Tunis"},
+        {"id": "lab_sfax",  "label": "Lab Sfax"},
+    ]
+
+def list_owners():
+    return [
+        {"id": "u_mourad", "label": "Mourad B."},
+        {"id": "u_amira",  "label": "Amira K."},
+    ]
+
+def list_existing_project_names():
+    # e.g. query Dataiku projects + any external registry
+    import dataiku
+    client = dataiku.api_client()
+    return [p["name"] for p in client.list_projects()]
+my-plugin/
+├── resource/
+│   ├── project_form.html
+│   └── project_choices.py       ← paramsPythonSetup
+├── js/
+│   └── project_form.js
+├── python-lib/
+│   └── project_data.py          ← your source-of-truth lists
+└── python-runnables/
+    └── create-project/
+        ├── runnable.json
+        └── runnable.py

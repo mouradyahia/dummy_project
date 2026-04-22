@@ -1,118 +1,77 @@
+<!-- Create new lab? -->
 <div class="control-group">
-  <label class="control-label">Lab</label>
-  <div class="controls" style="position: relative;">
+  <label class="control-label">Create new lab?</label>
+  <div class="controls">
+    <label class="radio-inline" style="margin-right: 15px;">
+      <input type="radio" ng-model="config.create_new_lab" value="yes" />
+      Yes
+    </label>
+    <label class="radio-inline">
+      <input type="radio" ng-model="config.create_new_lab" value="no" />
+      No
+    </label>
+  </div>
+</div>
+
+<!-- New lab name (shown only if Yes) -->
+<div class="control-group" ng-if="config.create_new_lab === 'yes'">
+  <label class="control-label">Name your lab</label>
+  <div class="controls">
     <input type="text"
            ng-model="config.lab"
-           ng-focus="labDropdownOpen = true"
-           ng-change="onLabInputChange()"
-           ng-blur="closeLabDropdownSoon()"
            class="form-control"
-           autocomplete="off"
-           placeholder="Pick a lab or type a new one..." />
+           placeholder="e.g. Welcome_Call" />
+    <span class="help-inline" ng-if="labNameError" style="color: #c9302c;">
+      {{ labNameError }}
+    </span>
+  </div>
+</div>
 
-    <ul ng-if="labDropdownOpen && filteredLabs.length"
-        style="position: absolute; top: 100%; left: 0; right: 0;
-               background: white; border: 1px solid #ccc;
-               max-height: 200px; overflow-y: auto; z-index: 1000;
-               list-style: none; margin: 0; padding: 0;
-               box-shadow: 0 2px 6px rgba(0,0,0,0.15);">
-      <li ng-repeat="c in filteredLabs"
-          ng-mousedown="selectLab(c)"
-          style="padding: 6px 12px; cursor: pointer;"
-          ng-mouseenter="hoverLab = c.value"
-          ng-mouseleave="hoverLab = null"
-          ng-style="{background: hoverLab === c.value ? '#f0f0f0' : 'white'}">
-        {{c.label}}
-      </li>
-    </ul>
+<!-- Existing lab select (shown only if No) -->
+<div class="control-group" ng-if="config.create_new_lab === 'no'">
+  <label class="control-label">Select your lab</label>
+  <div class="controls">
+    <select dku-bs-select="{liveSearch: true}"
+            ng-model="config.lab"
+            ng-options="c.value as c.label for c in choices.lab">
+      <option value="">— select a lab —</option>
+    </select>
   </div>
 </div>
 
 
-
-
-
-
-$scope.labDropdownOpen = false;
-$scope.filteredLabs = [];
-$scope.hoverLab = null;
-
-function refreshFilteredLabs() {
-    var q = ($scope.config.lab || "").toLowerCase();
-    var all = $scope.choices.lab || [];
-    if (!q) {
-        $scope.filteredLabs = all.slice(0, 50);
-    } else {
-        $scope.filteredLabs = all.filter(function(c) {
-            return c.label.toLowerCase().indexOf(q) !== -1;
-        }).slice(0, 50);
-    }
+// Default to "no" on form open
+if (!$scope.config.create_new_lab) {
+    $scope.config.create_new_lab = "no";
 }
 
-$scope.onLabInputChange = function() {
-    refreshFilteredLabs();
-    $scope.labDropdownOpen = true;
-};
-
-$scope.selectLab = function(c) {
-    $scope.config.lab = c.label;   // or c.value if you want the id
-    $scope.labDropdownOpen = false;
-};
-
-$scope.closeLabDropdownSoon = function() {
-    // Delay so click on dropdown item registers before blur closes it
-    $timeout(function() { $scope.labDropdownOpen = false; }, 150);
-};
-
-// Refresh the list whenever choices arrive (e.g., after domain change)
-$scope.$watch("choices.lab", refreshFilteredLabs);
+// Clear the lab value when switching modes, so stale values don't leak
+$scope.$watch("config.create_new_lab", function(newVal, oldVal) {
+    if (newVal === oldVal) return;
+    $scope.config.lab = null;
+    $scope.labNameError = "";
+    // Also clear downstream cascades
+    $scope.config.owner_id = null;
+    $scope.config.consumers = [];
+    $scope.config.contributors = [];
+    $scope.choices.owner_id = [];
+    $scope.choices.consumers = [];
+    $scope.choices.contributors = [];
+});
 
 
+$scope.labNameError = "";
+var LAB_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+$scope.$watch("config.lab", function(newVal) {
+    // Only validate in "yes" mode
+    if ($scope.config.create_new_lab === "yes") {
+        if (!newVal) {
+            $scope.labNameError = "";
+        } else if (!LAB_NAME_RE.test(newVal)) {
+            $scope.labNameError = "Only letters, digits, underscore and dash (max 64 chars)";
+        } else {
+            $scope.labNameError = "";
+        }
+    }
+});

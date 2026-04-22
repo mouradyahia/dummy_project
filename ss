@@ -75,3 +75,52 @@ $scope.$watch("config.lab", function(newVal) {
         }
     }
 });
+
+
+
+
+
+
+
+{ "name": "create_new_lab", "label": "Create new lab?", "type": "STRING", "defaultValue": "no" },
+{ "name": "lab",            "label": "Lab",             "type": "STRING", "mandatory": true }
+
+
+
+
+
+
+import re
+
+LAB_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+def run(self, progress_callback):
+    create_new_lab = self.config.get("create_new_lab", "no")
+    lab_name = (self.config.get("lab") or "").strip()
+
+    if not lab_name:
+        raise Exception("Lab is required")
+
+    if create_new_lab == "yes":
+        # Free-text path: validate format
+        if not LAB_NAME_RE.match(lab_name):
+            raise Exception(
+                f"Invalid lab name '{lab_name}'. "
+                "Only letters, digits, underscore and dash (max 64 chars)."
+            )
+        # Optional: check it doesn't already exist
+        existing = {l["id"] for l in list_labs_for_domain(self.config["domain"])}
+        if lab_name in existing:
+            raise Exception(
+                f"Lab '{lab_name}' already exists. "
+                "Pick it from the list instead of creating a new one."
+            )
+    else:
+        # Select path: must be in the known list for the domain
+        existing = {l["id"] for l in list_labs_for_domain(self.config["domain"])}
+        if lab_name not in existing:
+            raise Exception(
+                f"Selected lab '{lab_name}' does not belong to domain '{self.config['domain']}'"
+            )
+
+    # ... rest of project creation

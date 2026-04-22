@@ -27,3 +27,92 @@
     </ul>
   </div>
 </div>
+
+
+
+
+
+
+$scope.labDropdownOpen = false;
+$scope.filteredLabs = [];
+$scope.hoverLab = null;
+
+function refreshFilteredLabs() {
+    var q = ($scope.config.lab || "").toLowerCase();
+    var all = $scope.choices.lab || [];
+    if (!q) {
+        $scope.filteredLabs = all.slice(0, 50);
+    } else {
+        $scope.filteredLabs = all.filter(function(c) {
+            return c.label.toLowerCase().indexOf(q) !== -1;
+        }).slice(0, 50);
+    }
+}
+
+$scope.onLabInputChange = function() {
+    refreshFilteredLabs();
+    $scope.labDropdownOpen = true;
+};
+
+$scope.selectLab = function(c) {
+    $scope.config.lab = c.label;   // or c.value if you want the id
+    $scope.labDropdownOpen = false;
+};
+
+$scope.closeLabDropdownSoon = function() {
+    // Delay so click on dropdown item registers before blur closes it
+    $timeout(function() { $scope.labDropdownOpen = false; }, 150);
+};
+
+// Refresh the list whenever choices arrive (e.g., after domain change)
+$scope.$watch("choices.lab", refreshFilteredLabs);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

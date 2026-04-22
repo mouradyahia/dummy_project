@@ -55,3 +55,113 @@ $scope.$watch("config.create_new_lab", function(newVal, oldVal) {
 
 
 { "name": "create_new_project", "label": "Create new project?", "type": "STRING", "defaultValue": "no" }
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- Select existing project (shown only when create_new_project = no) -->
+<div class="control-group" ng-if="config.create_new_project === 'no'">
+  <label class="control-label">Select project</label>
+  <div class="controls">
+    <select dku-bs-select="{liveSearch: true}"
+            ng-model="config.existing_project_key"
+            ng-options="c.value as c.label for c in choices.existing_project">
+      <option value="">— select a project —</option>
+    </select>
+  </div>
+</div>
+
+<!-- Project name (shown only when creating new) -->
+<div class="control-group" ng-if="config.create_new_project === 'yes'">
+  <label class="control-label">Project name</label>
+  <div class="controls">
+    <input type="text"
+           ng-model="config.project_name"
+           ng-change="onNameChange()"
+           class="form-control" />
+    <span class="help-inline"
+          ng-if="nameCheck.message"
+          ng-style="{color: nameCheck.ok ? 'green' : '#c9302c'}">
+      {{ nameCheck.message }}
+    </span>
+  </div>
+</div>
+
+
+
+
+
+
+
+
+
+
+$scope.choices = {
+    domain: [], lab: [], owner_id: [],
+    consumers: [], contributors: [],
+    existing_project: []              // ← add
+};
+
+// Clear stale selection when switching modes
+$scope.$watch("config.create_new_project", function(newVal, oldVal) {
+    if (newVal === oldVal) return;
+    if (newVal === "yes") {
+        $scope.config.existing_project_key = null;
+    } else {
+        $scope.config.project_name = null;
+        $scope.nameCheck = { ok: null, message: "" };
+        // Load existing projects for the current lab
+        if ($scope.config.lab) {
+            loadChoices("existing_project");
+        }
+    }
+});
+
+// When lab changes and we're in "select existing" mode, refresh the list
+$scope.$watch("config.lab", function(newVal, oldVal) {
+    if (newVal === oldVal) return;
+
+    // ... your existing reset logic for owner/consumers/contributors ...
+
+    $scope.config.existing_project_key = null;
+    $scope.choices.existing_project = [];
+
+    if (newVal && !$scope.labNameError) {
+        loadChoices("owner_id");
+        loadChoices("consumers");
+        loadChoices("contributors");
+        if ($scope.config.create_new_project === "no") {
+            loadChoices("existing_project");
+        }
+    }
+});
+
+
+===================
+
+
+
+if param == "existing_project":
+    lab_id = config.get("lab")   # now holds the folder id, not the name
+    if not lab_id:
+        return {"choices": []}
+    return {"choices": _as_choices(list_projects_in_lab(lab_id))}
+
+
+def list_projects_in_lab(lab_folder_id):
+    import dataiku
+    client = dataiku.api_client()
+    lab_folder = client.get_project_folder(lab_folder_id)
+    return [
+        {"id": sub.project_folder_id, "label": sub.get_name()}
+        for sub in lab_folder.list_child_folders()
+    ]

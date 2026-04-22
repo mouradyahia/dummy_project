@@ -1,0 +1,57 @@
+<!-- Create new project? -->
+<div class="control-group">
+  <label class="control-label">Create new project?</label>
+  <div class="controls">
+    <label class="radio-inline" style="margin-right: 15px;">
+      <input type="radio"
+             ng-model="config.create_new_project"
+             value="yes"
+             ng-disabled="config.create_new_lab === 'yes'" />
+      Yes
+    </label>
+    <label class="radio-inline">
+      <input type="radio"
+             ng-model="config.create_new_project"
+             value="no"
+             ng-disabled="config.create_new_lab === 'yes'" />
+      No
+    </label>
+    <span class="help-inline"
+          ng-if="config.create_new_lab === 'yes'"
+          style="color: #888; margin-left: 10px; font-style: italic;">
+      A new lab requires creating a project.
+    </span>
+  </div>
+</div>
+
+
+
+// Default on form open
+if (!$scope.config.create_new_project) {
+    $scope.config.create_new_project = "no";
+}
+
+// Force create_new_project = "yes" whenever create_new_lab flips to "yes"
+$scope.$watch("config.create_new_lab", function(newVal, oldVal) {
+    if (newVal === oldVal) return;
+
+    if (newVal === "yes") {
+        $scope.config.create_new_project = "yes";  // forced
+    }
+    // When switching back to "no", leave create_new_project at whatever it was
+    // — user can change it again freely.
+
+    // Your existing reset logic stays
+    $scope.config.lab = null;
+    $scope.labNameError = "";
+    $scope.config.owner_id = null;
+    $scope.config.consumers = [];
+    $scope.config.contributors = [];
+    $scope.choices.owner_id = [];
+    $scope.choices.consumers = [];
+    $scope.choices.contributors = [];
+});
+
+
+
+{ "name": "create_new_project", "label": "Create new project?", "type": "STRING", "defaultValue": "no" }

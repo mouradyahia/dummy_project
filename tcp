@@ -1,0 +1,42 @@
+if param == "owner_id":
+    lab_id = config.get("lab")
+    if not lab_id:
+        return {"choices": []}
+
+    import dataiku
+    client = dataiku.api_client()
+    current_user = client.get_auth_info()["authIdentifier"]
+
+    owners = list_owners_for_lab(lab_id)
+    choices = _as_choices(owners)
+
+    # Return default alongside choices
+    return {
+        "choices": choices,
+        "default": current_user if any(c["value"] == current_user for c in choices) else None
+    }
+
+
+
+
+
+function loadChoices(paramName) {
+    $scope.callPythonDo({ parameterName: paramName }).then(
+        function(data) {
+            $scope.choices[paramName] = (data && data.choices) || [];
+            // Apply default only if no value is currently set
+            if (data && data.default && !$scope.config[paramName]) {
+                $scope.config[paramName] = data.default;
+            }
+        },
+        function(err) {
+            console.error("Failed to load " + paramName, err);
+            $scope.choices[paramName] = [];
+        }
+    );
+}
+
+
+
+
+

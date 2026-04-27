@@ -1,0 +1,150 @@
+<div class="control-group" ng-if="config.create_new_project === 'yes'">
+  <label class="control-label">Project description</label>
+  <div class="controls">
+
+    <!-- Toolbar -->
+    <div class="md-toolbar"
+         style="border: 1px solid #ccc; border-bottom: none; border-radius: 3px 3px 0 0;
+                padding: 4px; background: #f7f7f7; display: flex; gap: 2px; flex-wrap: wrap;">
+
+      <button type="button" class="btn btn-default btn-sm" title="Heading 1"
+              ng-click="mdInsert('# ', '', 'Heading 1', true)">H1</button>
+      <button type="button" class="btn btn-default btn-sm" title="Heading 2"
+              ng-click="mdInsert('## ', '', 'Heading 2', true)">H2</button>
+      <button type="button" class="btn btn-default btn-sm" title="Heading 3"
+              ng-click="mdInsert('### ', '', 'Heading 3', true)">H3</button>
+
+      <span style="border-left: 1px solid #ccc; margin: 0 4px;"></span>
+
+      <button type="button" class="btn btn-default btn-sm" title="Bold (Ctrl+B)"
+              ng-click="mdInsert('**', '**', 'bold text')"><b>B</b></button>
+      <button type="button" class="btn btn-default btn-sm" title="Italic (Ctrl+I)"
+              ng-click="mdInsert('*', '*', 'italic text')"><i>I</i></button>
+      <button type="button" class="btn btn-default btn-sm" title="Underline"
+              ng-click="mdInsert('<u>', '</u>', 'underlined text')"
+              style="text-decoration: underline;">U</button>
+
+      <span style="border-left: 1px solid #ccc; margin: 0 4px;"></span>
+
+      <button type="button" class="btn btn-default btn-sm" title="Bullet list"
+              ng-click="mdInsertList('- ')">• List</button>
+      <button type="button" class="btn btn-default btn-sm" title="Numbered list"
+              ng-click="mdInsertList('1. ')">1. List</button>
+
+      <span style="border-left: 1px solid #ccc; margin: 0 4px;"></span>
+
+      <button type="button" class="btn btn-default btn-sm" title="Link"
+              ng-click="mdInsert('[', '](https://)', 'link text')">🔗</button>
+      <button type="button" class="btn btn-default btn-sm" title="Inline code"
+              ng-click="mdInsert('`', '`', 'code')">{ }</button>
+      <button type="button" class="btn btn-default btn-sm" title="Code block"
+              ng-click="mdInsert('\n```\n', '\n```\n', 'code block', true)">⌗</button>
+    </div>
+
+    <!-- Textarea -->
+    <textarea id="project-description-textarea"
+              ng-model="config.project_description"
+              class="form-control"
+              rows="8"
+              placeholder="Describe the purpose of this project. Use the toolbar to format. Markdown is rendered in DSS."
+              style="width: 100%; resize: vertical; font-family: monospace;
+                     border-radius: 0 0 3px 3px; border-top-left-radius: 0; border-top-right-radius: 0;">
+    </textarea>
+
+    <span class="help-block" style="font-size: 11px; color: #888; margin-top: 4px;">
+      {{ (config.project_description || '').length }} characters · Markdown supported
+    </span>
+
+  </div>
+</div>
+
+
+
+
+
+
+
+// Default empty string so .length works in the template
+if (!$scope.config.project_description) $scope.config.project_description = "";
+
+// -------------------------------------------------------------------
+// Markdown toolbar
+// -------------------------------------------------------------------
+function getTextarea() {
+    return document.getElementById("project-description-textarea");
+}
+
+/**
+ * Insert markdown syntax around the current selection (or cursor).
+ * @param {string} prefix - text inserted before the selection
+ * @param {string} suffix - text inserted after the selection
+ * @param {string} placeholder - text used when there's no selection
+ * @param {boolean} isBlock - if true, ensures prefix is at line start
+ */
+$scope.mdInsert = function(prefix, suffix, placeholder, isBlock) {
+    var ta = getTextarea();
+    if (!ta) return;
+
+    var start = ta.selectionStart;
+    var end = ta.selectionEnd;
+    var value = ta.value || "";
+    var selected = value.substring(start, end);
+    var insertion = selected || placeholder;
+
+    // For block-level (headers, code blocks): make sure prefix starts on its own line
+    if (isBlock && start > 0 && value[start - 1] !== "\n") {
+        prefix = "\n" + prefix;
+    }
+
+    var newValue = value.substring(0, start) + prefix + insertion + suffix + value.substring(end);
+    var cursorStart = start + prefix.length;
+    var cursorEnd = cursorStart + insertion.length;
+
+    // Update the model (Angular needs this) and the DOM
+    $scope.config.project_description = newValue;
+    // Defer cursor positioning until after Angular's digest writes the value to the DOM
+    $timeout(function() {
+        ta.focus();
+        ta.setSelectionRange(cursorStart, cursorEnd);
+    }, 0);
+};
+
+/**
+ * List variant: prefixes each selected line with the bullet/number.
+ */
+$scope.mdInsertList = function(marker) {
+    var ta = getTextarea();
+    if (!ta) return;
+
+    var start = ta.selectionStart;
+    var end = ta.selectionEnd;
+    var value = ta.value || "";
+
+    if (start === end) {
+        // No selection — just insert one item
+        $scope.mdInsert("\n" + marker, "", "list item", true);
+        return;
+    }
+
+    var selected = value.substring(start, end);
+    var lines = selected.split("\n");
+    var transformed = lines.map(function(line, i) {
+        if (!line.trim()) return line;
+        var prefix = marker === "1. " ? (i + 1) + ". " : marker;
+        return prefix + line;
+    }).join("\n");
+
+    // Make sure we're on a new line
+    var leadingNewline = (start > 0 && value[start - 1] !== "\n") ? "\n" : "";
+    var newValue = value.substring(0, start) + leadingNewline + transformed + value.substring(end);
+
+    $scope.config.project_description = newValue;
+    $timeout(function() {
+        ta.focus();
+        ta.setSelectionRange(start + leadingNewline.length, start + leadingNewline.length + transformed.length);
+    }, 0);
+};
+
+
+
+

@@ -1,0 +1,92 @@
+# -*- coding: utf-8 -*-
+# compute_rul_direct_debits_kpi_v1 — KPI table rebuilt completely from DETAILS at every run (option K1).
+#
+# Logic of the deck "exemple d'alimentation de la table de KPI":
+#   - one KPI row per cohort axis set; the month is the emission month of the INITIAL DD of the group,
+#     so a NDD1 emitted in September is counted on the July row of its group;
+#   - the failure reason, IBL, market, amount range and day of month are those of the group (initial DD);
+#   - each indicator = count of lines with the flag at 1, and the sum of their amounts:
+#     DD nb / mt, failed DD nb / mt, NDD1 nb / mt, failed NDD1 nb / mt, NDD2 nb / mt, failed NDD2 nb / mt;
+#   - lines added to a re-debit (flags all 0) count nowhere.
+# Rebuilding everything keeps KPI consistent with DETAILS without choosing which cohorts to recompute.
+
+import dataiku
+from dataiku import spark as dkuspark
+from pyspark import SparkContext
+from pyspark.sql import SQLContext, Window
+from pyspark.sql import functions as F
+
+from COR.prep import get_partition_value
+
+# ------------------------------------------------------------------ config
+V = dataiku.get_custom_variables()
+RECOMPUTE_MONTHS = int(V.get("recompute_months", 6))     # same window as DETAILS
+GROUP_MAX_MONTHS = int(V.get("group_max_months", 6))     # Q3 answer: a group lasts at most 6 months
+AMOUNT_BOUNDS    = [int(x) for x in V.get("kpi_amount_bounds", "100,500,1000,5000").split(",")]   # TO CONFIRM (mapping KPI)
+
+SRC = "PHASE2_03_COR_PRODUCT.direct_debits_cash_flow_details"   # the 4-year DETAILS table, TO CONFIRM name
+OUT = "rul_direct_debits_kpi_v1"
+
+GK = ["cod_country", "cod_business_type", "id_group"]
+AXES = ["mois", "cod_country", "cod_business_type", "cod_failure_reason", "lib_contract_ibl",
+        "lib_contract_ibl_market", "lib_amount_range", "num_day_of_month"]
+
+
+def amount_range(col):
+    """[0,100) -> '0000-0100', ..., >= last bound -> '5000+'. Zero-padded so the label sorts."""
+    expr = F.lit(f"{AMOUNT_BOUNDS[-1]:04d}+")
+    for lo, hi in reversed(list(zip([0] + AMOUNT_BOUNDS[:-1], AMOUNT_BOUNDS))):
+        expr = F.when(col < hi, F.lit(f"{lo:04d}-{hi:04d}")).otherwise(expr)
+    return expr
+
+
+def build_kpi(det, photo_date):
+    """det: the DETAILS table (all months) -> one row per axis set, all cohorts."""
+    # 1. axes of the group, taken on its initial DD (order 1 lines; its failure reason is the "motif")
+    grp = (det.filter(F.col("num_order_in_group") == 1)
+              .groupBy(*GK)
+              .agg(F.max("cod_cash_flow_failure_reason").alias("cod_failure_reason")))
+    det = det.join(grp, GK, "left")
+
+    # 2. one indicator pair per flag
+    def nb(flag):
+        return F.sum(F.col(flag)).alias(flag.replace("flg_", "").replace("_emitted", "") + "_nb")
+
+    def mt(flag):
+        return F.sum(F.when(F.col(flag) == 1, F.col("mt_direct_debit")).otherwise(0)) \
+                .alias(flag.replace("flg_", "").replace("_emitted", "") + "_mt")
+
+    flags = ["flg_dd_emitted", "flg_dd_failed", "flg_ndd1_emitted", "flg_ndd1_failed", "flg_ndd2_emitted", "flg_ndd2_failed"]
+    kpi = (det.withColumn("mois", F.date_format("dt_initial_direct_debit", "yyyy-MM"))
+              .withColumn("lib_amount_range", amount_range(F.col("mt_initial_direct_debit")))
+              .withColumn("num_day_of_month", F.dayofmonth("dt_initial_direct_debit"))
+              .groupBy(*AXES)
+              .agg(*[f(flag) for flag in flags for f in (nb, mt)]))
+
+    # 3. a cohort is provisional while one of its groups can still be rewritten by a later photo
+    m_first = F.trunc(F.lit(photo_date).cast("date"), "month")
+    window_start = F.add_months(m_first, -(RECOMPUTE_MONTHS - 1))
+    cohort_end = F.add_months(F.to_date(F.concat(F.col("mois"), F.lit("-01"))), GROUP_MAX_MONTHS)
+    return (kpi.withColumn("flg_provisional", (cohort_end >= window_start).cast("int"))
+               .withColumn("source", F.lit("PHASE_2"))          # phase 1 KPI are copied once with source = 'PHASE_1'
+               .withColumn("tech_photo_date", F.lit(photo_date).cast("date"))
+               .withColumn("tech_ingestion_ts", F.current_timestamp()))
+
+
+# ------------------------------------------------------------------ Dataiku glue
+if __name__ == "__main__":
+    sc = SparkContext.getOrCreate()
+    sql = SQLContext(sc)
+    photo_date = get_partition_value("photo_date")
+    print(f"[kpi] {OUT} | photo {photo_date} | full rebuild from {SRC}")
+
+    det = dkuspark.get_dataframe(sql, dataiku.Dataset(SRC))
+    kpi = build_kpi(det, photo_date).cache()
+
+    n = kpi.count()
+    dups = kpi.groupBy(*AXES).count().filter("count > 1").count()
+    print(f"[kpi] {n} rows, {dups} duplicate axis sets")
+    if n == 0 or dups:
+        raise RuntimeError(f"[kpi] {n} rows, {dups} duplicates: nothing written")
+
+    dkuspark.write_with_schema(dataiku.Dataset(OUT), kpi)

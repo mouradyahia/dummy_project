@@ -1,0 +1,67 @@
+# -*- coding: utf-8 -*-
+# update_DD_details — PRODUCT step of solution A: replace the 6 emission months of one country in PostgreSQL.
+#
+# in : dd_details_rules_6M   partition country|photo_date: the lines of months M-5 .. M (output of the rules recipe)
+# out: DD_details_stg        PostgreSQL staging, overwritten at each run, never read by Power BI
+#      DD_details            PostgreSQL, 4 years, all countries, read by Power BI
+#
+# One transaction on DD_details: DELETE country x months M-5..M, INSERT the staging, DELETE beyond 48 months.
+# Older months are never touched (frozen). Replaying a photo gives the same table (idempotent).
+# Python recipe (pandas), not Spark: one country x 6 months fits in memory.
+import pandas as pd
+import dataiku
+from dataiku import SQLExecutor2
+from COR.prep import get_partition_value
+
+RECOMPUTE_MONTHS = 6       # same window as the rules recipe
+RETENTION_MONTHS = 48      # depth exposed by the data product
+KEY = ["cod_business_type", "cod_country", "id_direct_debit", "id_direct_debit_contract",
+       "id_direct_debit_financing_condition", "id_direct_debit_invoice"]
+
+SRC = dataiku.Dataset("dd_details_rules_6M")
+STG = dataiku.Dataset("DD_details_stg")
+DST = dataiku.Dataset("DD_details")
+
+
+def sql_name(ds):
+    """schema.table of a SQL dataset, from its settings (nothing hardcoded)."""
+    info = ds.get_location_info()["info"]
+    return f'"{info["schema"]}"."{info["table"]}"' if info.get("schema") else f'"{info["table"]}"'
+
+
+country = get_partition_value("country")
+photo_date = get_partition_value("photo_date")
+m = pd.Period(photo_date, "M")
+months = [str(m - i) for i in range(RECOMPUTE_MONTHS)]            # 'YYYY-MM': M, M-1, .. M-5
+purge_before = str(m - (RETENTION_MONTHS - 1))
+
+# 1. controls on the input before touching the product table
+df = SRC.get_dataframe()
+if df.empty:
+    raise RuntimeError(f"[product] {country}|{photo_date}: empty input, DD_details untouched")
+(cod_country,) = df["cod_country"].unique()                        # one country per partition, else ValueError
+outside = set(df["mois_emission"]) - set(months)
+if outside:
+    raise RuntimeError(f"[product] months outside the window {months}: {sorted(outside)}")
+if df.duplicated(KEY).any():
+    raise RuntimeError("[product] duplicate keys in input, DD_details untouched")
+
+# 2. staging (overwritten)
+STG.write_with_schema(df)
+
+# 3. annule & remplace. pre_queries, the query and post_queries run on one connection, committed only by
+#    the final COMMIT: an error in any statement leaves DD_details as it was (connection must not be autocommit).
+dst, stg = sql_name(DST), sql_name(STG)
+cols = ", ".join(f'"{c}"' for c in df.columns)
+in_months = ", ".join(f"'{x}'" for x in months)
+n = SQLExecutor2(dataset=DST).query_to_df(
+    f"SELECT count(*) AS n FROM {dst} WHERE cod_country = '{cod_country}' AND mois_emission IN ({in_months})",
+    pre_queries=[
+        f"DELETE FROM {dst} WHERE cod_country = '{cod_country}' AND mois_emission IN ({in_months})",
+        f"INSERT INTO {dst} ({cols}) SELECT {cols} FROM {stg}",
+        f"DELETE FROM {dst} WHERE mois_emission < '{purge_before}'",   # purge beyond 4 years, all countries
+    ],
+    post_queries=["COMMIT"])["n"][0]
+print(f"[product] {cod_country} {months[-1]}..{months[0]}: {len(df)} lines staged, {n} now in DD_details, purged < {purge_before}")
+if n != len(df):                                                   # already committed: this only flags the run
+    raise RuntimeError(f"[product] {n} lines in DD_details vs {len(df)} staged")
